@@ -14,20 +14,30 @@ import os
 def data_loader_half(args):
     data_filename = os.path.join('{}_norm{}_d{}-{}-{}_s{}'.format(args.task, args.data_normalize, args.train_days, args.delay_days, args.test_days, args.lstm_sequence_length))
     
-    if not os.path.exists(os.path.join(args.data_path + 'train_'+ data_filename)):
-        print('== data import ==')
-        # Dataset import 
-        edge_daegu_infect = np.load('./data/raw_data/half/edge_daegu_infect_half_feb.npy', allow_pickle=True)
-        edge_daegu_fake_infect_full = np.load('./data/raw_data/half/edge_daegu_fake_infect_half_full.npy', allow_pickle=True)
-        edge_daegu_user = np.load('./data/raw_data/half/edge_daegu_user_half_feb.npy', allow_pickle=True) # 2월
-        edge_daegu_user_mar = np.load('./data/raw_data/half/edge_daegu_user_half_mar.npy', allow_pickle=True) 
-        edge_daegu_user_full = np.concatenate((edge_daegu_user, edge_daegu_user_mar))
-        node_daegu_fake_infect_full = torch.from_numpy(np.load('./data/raw_data/half/node_daegu_fake_infect_half_mar.npy', allow_pickle=True))
-        node_daegu_infect = torch.from_numpy(np.load('./data/raw_data/half/node_daegu_fake_infect_half_feb.npy', allow_pickle=True))
-        node_daegu_user = torch.from_numpy(np.load('./data/raw_data/half/node_daegu_user_half_feb.npy', allow_pickle=True)) # 2월
-        node_daegu_user_mar = torch.from_numpy(np.load('./data/raw_data/half/node_daegu_user_half_mar.npy', allow_pickle=True))
-        node_daegu_user_full = torch.cat((node_daegu_user, node_daegu_user_mar), dim=0)
+    print('== data import ==')
+    # Dataset import 
+    edge_daegu_infect = np.load('./data/raw_data/half/edge_daegu_infect_half_feb.npy', allow_pickle=True)
+    edge_daegu_fake_infect_full = np.load('./data/raw_data/half/edge_daegu_fake_infect_half_full.npy', allow_pickle=True)
+    edge_daegu_user = np.load('./data/raw_data/half/edge_daegu_user_half_feb.npy', allow_pickle=True) # 2월
+    edge_daegu_user_mar = np.load('./data/raw_data/half/edge_daegu_user_half_mar.npy', allow_pickle=True) 
+    edge_daegu_user_full = np.concatenate((edge_daegu_user, edge_daegu_user_mar))
+    node_daegu_fake_infect_full = torch.from_numpy(np.load('./data/raw_data/half/node_daegu_fake_infect_half_mar.npy', allow_pickle=True))
+    node_daegu_infect = torch.from_numpy(np.load('./data/raw_data/half/node_daegu_fake_infect_half_feb.npy', allow_pickle=True))
+    node_daegu_user = torch.from_numpy(np.load('./data/raw_data/half/node_daegu_user_half_feb.npy', allow_pickle=True)) # 2월
+    node_daegu_user_mar = torch.from_numpy(np.load('./data/raw_data/half/node_daegu_user_half_mar.npy', allow_pickle=True))
+    node_daegu_user_full = torch.cat((node_daegu_user, node_daegu_user_mar), dim=0)
+    
+    # order : user, infect , user_full, infect_full
+    min_max_values = [torch.min(node_daegu_user).item(), torch.max(node_daegu_user).item(), 
+                      np.min(edge_daegu_user[:,4]), np.max(edge_daegu_user[:,4]), 
+                      torch.min(node_daegu_infect).item(), torch.max(node_daegu_infect).item(),
+                      np.min(edge_daegu_user[:,4]), np.max(edge_daegu_user[:,4]), 
+                      torch.min(node_daegu_user_full).item(), torch.max(node_daegu_user_full).item(), 
+                      np.min(edge_daegu_user_full[:,4]), np.max(edge_daegu_user_full[:,4]), 
+                      torch.min(node_daegu_fake_infect_full).item(), torch.max(node_daegu_fake_infect_full).item(),
+                      np.min(edge_daegu_fake_infect_full[:,4]), np.max(edge_daegu_fake_infect_full[:,4])]
 
+    if not os.path.exists(os.path.join(args.data_path + 'train_'+ data_filename)):
         # hyperparameters
         LSTM_SEQUENCE_LENGTH = args.lstm_sequence_length
         TRAIN_DAYS = args.train_days
@@ -60,17 +70,7 @@ def data_loader_half(args):
             edge_fake_infect_full = np.array([edge_daegu_fake_infect_full[:,0]+edge_daegu_fake_infect_full[:,1], edge_daegu_fake_infect_full[:,2],
                                               edge_daegu_fake_infect_full[:,3],(edge_daegu_fake_infect_full[:,4] - np.min(edge_daegu_fake_infect_full[:,4]))/ \
                                               (np.max(edge_daegu_fake_infect_full[:,4])-np.min(edge_daegu_fake_infect_full[:,4]))]).transpose()
-            
-            # order : user, infect , user_full, infect_full
-            self.min_max_values = [torch.min(node_daegu_user).item(), torch.max(node_daegu_user).item(), 
-                                  np.min(edge_daegu_user[:,4]), np.max(edge_daegu_user[:,4]), 
-                                  torch.min(node_daegu_infect).item(), torch.max(node_daegu_infect).item(),
-                                  np.min(edge_daegu_user[:,4]), np.max(edge_daegu_user[:,4]), 
-                                  torch.min(node_daegu_user_full).item(), torch.max(node_daegu_user_full).item(), 
-                                  np.min(edge_daegu_user_full[:,4]), np.max(edge_daegu_user_full[:,4]), 
-                                  torch.min(node_daegu_fake_infect_full).item(), torch.max(node_daegu_fake_infect_full).item(),
-                                  np.min(edge_daegu_fake_infect_full[:,4]), np.max(edge_daegu_fake_infect_full[:,4])]
-
+   
         else:
             node_user = node_daegu_user.reshape([-1, NUM_DONG])
             node_infect = node_daegu_infect.reshape([-1, NUM_DONG])
@@ -177,14 +177,14 @@ def data_loader_half(args):
         for i in range(4): # 4 weeks
             for j, weekday in enumerate(weekday_list):
                 for time in range(48):
-                    temp_sig[(48*7)*i + 48*j + time][i] = 1
+                    temp_sig[(48*7)*i + 48*j + time][j] = 1
                     temp_sig[(48*7)*i + 48*j + time][7 + time] = 1
-                    if i == 6: # 금요일
+                    if j == 6: # 금요일
                         temp_sig[(48*7)*i + 48*j + time][7+48+1] = 1 # before holiday
-                    elif i == 0: # 토요일
+                    elif j == 0: # 토요일
                         temp_sig[(48*7) + 48*j + time][7+48+1] = 1 # before holiday
                         temp_sig[(48*7) + 48*j + time][7+48] = 1 # holiday
-                    elif i == 1: # 일요일
+                    elif j == 1: # 일요일
                         temp_sig[(48*7) + 48*j + time][7+48] = 1 # holiday
 
         # the last day(29th)
@@ -206,28 +206,28 @@ def data_loader_half(args):
         for i in range(8): # 8 weeks
             for j, weekday in enumerate(weekday_list):
                 for time in range(48):
-                    temp_sig_full[(48*7)*i + 48*j + time][i] = 1
+                    temp_sig_full[(48*7)*i + 48*j + time][j] = 1
                     temp_sig_full[(48*7)*i + 48*j + time][7 + time] = 1
-                    if i == 6: # 금요일
+                    if j == 6: # 금요일
                         temp_sig_full[(48*7)*i + 48*j + time][7+48+1] = 1 # before holiday
-                    elif i == 0: # 토요일
+                    elif j == 0: # 토요일
                         temp_sig_full[(48*7)*i + 48*j + time][7+48+1] = 1 # before holiday
                         temp_sig_full[(48*7)*i + 48*j + time][7+48] = 1 # holiday
-                    elif i == 1: # 일요일
+                    elif j == 1: # 일요일
                         temp_sig_full[(48*7)*i + 48*j + time][7+48] = 1 # holiday
 
         # last 4 days
         for j in range(4):
             for time in range(48):
-                temp_sig_full[56*48 + time][j] = 1
-                temp_sig_full[56*48 + time][7 + time] = 1
+                temp_sig_full[56*48 + 48*j + time][j] = 1
+                temp_sig_full[56*48 + 48*j + time][7 + time] = 1
                 if i == 6: # 금요일
-                    temp_sig_full[(48*7)*7 + 48*j + time][7+48+1] = 1 # before holiday
+                    temp_sig_full[56*48 + 48*j + time][7+48+1] = 1 # before holiday
                 elif i == 0: # 토요일
-                    temp_sig_full[(48*7)*7 + 48*j + time][7+48+1] = 1 # before holiday
-                    temp_sig_full[(48*7)*7 + 48*j + time][7+48] = 1 # holiday
+                    temp_sig_full[56*48 + 48*j + time][7+48+1] = 1 # before holiday
+                    temp_sig_full[56*48 + 48*j + time][7+48] = 1 # holiday
                 elif i == 1: # 일요일
-                    temp_sig_full[(48*7)*7 + 48*j + time][7+48] = 1 # holiday
+                    temp_sig_full[56*48 + 48*j + time][7+48] = 1 # holiday
 
         train_temp_sig_full_inputs, test_temp_sig_full_inputs = [], []
         for i in range(48 * TRAIN_DAYS):
@@ -261,12 +261,13 @@ def data_loader_half(args):
         
         elif args.task == 'fake_full':
             train_full_inputs = []
+            print(train_fake_infect_full_edge_inputs[0])
             for i in tqdm(range(48*TRAIN_DAYS)):
                 train_g_user_full_inputs, train_g_fake_infect_full_inputs = [], []
                 for j in range(48*LSTM_SEQUENCE_LENGTH):
-                    train_g_user_full_inputs.append([train_user_full_node_list[i][j], train_user_full_edge_inputs[i][j][0].edge_index, 
+                    train_g_user_full_inputs.append([train_user_full_node_list[i][j], train_user_full_edge_inputs[i][j][0].edge_index, \
                                                         torch.tensor(train_user_full_edge_inputs[i][j][1].astype(float))])
-                    train_g_fake_infect_full_inputs.append([train_fake_infect_full_node_list[i][j], train_fake_infect_full_edge_inputs[i][j][0].edge_index, 
+                    train_g_fake_infect_full_inputs.append([train_fake_infect_full_node_list[i][j], train_fake_infect_full_edge_inputs[i][j][0].edge_index, \
                                                           torch.tensor(train_fake_infect_full_edge_inputs[i][j][1].astype(float))])
                 train_full_inputs.append([train_g_user_full_inputs, train_g_fake_infect_full_inputs, train_temp_sig_full_inputs[i]])
 
@@ -282,17 +283,18 @@ def data_loader_half(args):
 
         ###################
         ###### label ######
+        
         print('== label ready ==')
         if args.task == 'real_feb':
             # user, infect
             # sty label
-            target_user_sty = node_daegu_user.reshape([-1, NUM_DONG])
-            train_target_user_sty = target_user_sty[48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS) : 48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS)]
-            test_target_user_sty = target_user_sty[48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS):]
-
-            target_infect_sty = node_daegu_infect.reshape([-1, NUM_DONG])
-            train_target_infect_sty = target_infect_sty[48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS) : 48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS)]
-            test_target_infect_sty = target_infect_sty[48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS):]
+            node_daegu_user_reshape = node_daegu_user.reshape([-1, NUM_DONG])
+            node_daegu_infect_resahape = node_daegu_infect.reshape([-1, NUM_DONG])
+            target_user_sty = []
+            target_infect_sty = []
+            for i, ymd_time in enumerate(ymd_time_lst):
+                target_user_sty.append(node_daegu_user_reshape[i])
+                target_infect_sty.append(node_daegu_infect_resahape[i])
 
             # mv_label                   
             mv_user = pd.DataFrame(np.array([edge_daegu_user[:,0]+edge_daegu_user[:,1], edge_daegu_user[:,2], edge_daegu_user[:,3], edge_daegu_user[:,4]]).transpose(),
@@ -306,22 +308,28 @@ def data_loader_half(args):
             infect_to_dong_grouped = infect_mv_infect.groupby(['ymd_time', 'to_dong']).sum()['mv_num']
             infect_to_dong_grouped = infect_to_dong_grouped.reset_index()
 
-            target_user_mv = torch.zeros([48*(TRAIN_DAYS+DELAY_DAYS+TEST_DAYS), NUM_DONG])
-            target_infect_mv = torch.zeros([48*(TRAIN_DAYS+DELAY_DAYS+TEST_DAYS), NUM_DONG])
+            target_user_mv = []
+            target_infect_mv = []
             for i, ymd_time in tqdm(enumerate(ymd_time_lst)):
+                target_user_mv_dong, target_infect_mv_dong = torch.zeros([NUM_DONG]), torch.zeros([NUM_DONG])
                 for j, dong in enumerate(dong_lst):
                     if not user_to_dong_grouped[(user_to_dong_grouped['ymd_time']==ymd_time) & (user_to_dong_grouped['to_dong']==dong)].empty:
-                        target_user_mv[i][j] = user_to_dong_grouped[(user_to_dong_grouped['ymd_time']==ymd_time) & (user_to_dong_grouped['to_dong']==dong)]['mv_num'].item()
+                        target_user_mv_dong[j] = user_to_dong_grouped[(user_to_dong_grouped['ymd_time']==ymd_time) & (user_to_dong_grouped['to_dong']==dong)]['mv_num'].item()
                     if not infect_to_dong_grouped[(infect_to_dong_grouped['ymd_time']==ymd_time) & (infect_to_dong_grouped['to_dong']==dong)].empty:
-                        target_infect_mv[i][j] = infect_to_dong_grouped[(infect_to_dong_grouped['ymd_time']==ymd_time) & (infect_to_dong_grouped['to_dong']==dong)]['mv_num'].item()
+                        target_infect_mv_dong[j] = infect_to_dong_grouped[(infect_to_dong_grouped['ymd_time']==ymd_time) & (infect_to_dong_grouped['to_dong']==dong)]['mv_num'].item()
+                target_user_mv.append(target_user_mv_dong)
+                target_infect_mv.append(target_infect_mv_dong)
+                
+            train_target, test_target = [], []
+            for i in range(48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS), 48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS)):
+                train_target_user = target_user_sty[i] + target_user_mv[i]
+                train_target_infect = target_infect_sty[i] + target_infect_mv[i]
+                train_target.append([train_target_user, train_target_infect])
 
-            train_target_user_mv = target_user_mv[48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS) : 48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS)]
-            test_target_user_mv = target_user_mv[48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS):]
-            train_target_infect_mv = target_infect_mv[48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS) : 48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS)]
-            test_target_infect_mv = target_infect_mv[48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS):]
-
-            train_target = [train_target_user_sty + train_target_user_mv, train_target_infect_sty + train_target_infect_mv]
-            test_target = [test_target_user_sty + test_target_user_mv, test_target_infect_sty + test_target_infect_mv]                           
+            for i in range(48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS), 48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS + TEST_DAYS)):
+                test_target_user = target_user_sty[i] + target_user_mv[i]
+                test_target_infect = target_infect_sty[i] + target_infect_mv[i]
+                test_target.append([test_target_user, test_target_infect])                     
 
             # train datalaoder
             train_dataset = list(zip(train_inputs, train_target)) 
@@ -330,42 +338,50 @@ def data_loader_half(args):
         elif args.task == 'fake_full':
             # user_full, fake_infect_full
             # sty label
-            target_user_full_sty = node_daegu_user_full.reshape([-1, NUM_DONG])
-            train_target_user_full_sty = target_user_full_sty[48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS) : 48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS)]
-            test_target_user_full_sty = target_user_full_sty[48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS):]
-
-            target_fake_infect_full_sty = node_daegu_fake_infect_full.reshape([-1, NUM_DONG])
-            train_target_fake_infect_full_sty = target_fake_infect_full_sty[48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS) : 48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS)]
-            test_target_fake_infect_full_sty = target_fake_infect_full_sty[48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS):]
-
+            node_daegu_user_full_reshape = node_daegu_user_full.reshape([-1, NUM_DONG])
+            node_daegu_fake_infect_full_resahape = node_daegu_fake_infect_full.reshape([-1, NUM_DONG])
+            target_user_full_sty = []
+            target_fake_infect_full_sty = []
+            for i, ymd_time in enumerate(ymd_time_full_lst):
+                target_user_full_sty.append(node_daegu_user_full_reshape[i])
+                target_fake_infect_full_sty.append(node_daegu_fake_infect_full_resahape[i])
+    
             # mv label
-            mv_user_full = pd.DataFrame(np.array([edge_daegu_user_full[:,0]+edge_daegu_user_full[:,1], edge_daegu_user_full[:,2], edge_daegu_user_full[:,3], edge_daegu_user_full[:,4]]).transpose(),
-                                   columns=['ymd_time', 'from_dong', 'to_dong', 'mv_num'])
+            mv_user_full = pd.DataFrame(np.array([edge_daegu_user_full[:,0]+edge_daegu_user_full[:,1], edge_daegu_user_full[:,2], edge_daegu_user_full[:,3],
+                                                  edge_daegu_user_full[:,4]]).transpose(), columns=['ymd_time', 'from_dong', 'to_dong', 'mv_num'])
             user_full_to_dong_grouped = mv_user_full.groupby(['ymd_time', 'to_dong']).sum()['mv_num']
             user_full_to_dong_grouped = user_full_to_dong_grouped.reset_index()
 
-            fake_infect_full_mv_infect = pd.DataFrame(np.array([edge_daegu_fake_infect_full[:,0]+edge_daegu_fake_infect_full[:,1], edge_daegu_fake_infect_full[:,2], edge_daegu_fake_infect_full[:,3], edge_daegu_fake_infect_full[:,4]]).transpose(),
-                                         columns=['ymd_time', 'from_dong', 'to_dong', 'mv_num'])
+            fake_infect_full_mv_infect = pd.DataFrame(np.array([edge_daegu_fake_infect_full[:,0]+edge_daegu_fake_infect_full[:,1], edge_daegu_fake_infect_full[:,2],
+                                                                edge_daegu_fake_infect_full[:,3], edge_daegu_fake_infect_full[:,4]]).transpose(),
+                                                      columns=['ymd_time', 'from_dong', 'to_dong', 'mv_num'])
             fake_infect_full_to_dong_grouped = fake_infect_full_mv_infect.groupby(['ymd_time', 'to_dong']).sum()['mv_num']
             fake_infect_full_to_dong_grouped = fake_infect_full_to_dong_grouped.reset_index()
-
-            target_user_full_mv = torch.zeros([48*(TRAIN_DAYS+DELAY_DAYS+TEST_DAYS), NUM_DONG])
-            target_fake_infect_full_mv = torch.zeros([48*(TRAIN_DAYS+DELAY_DAYS+TEST_DAYS), NUM_DONG])
-            for i, ymd_time in tqdm(enumerate(ymd_time_full_lst)):
+            
+            target_user_full_mv = []
+            target_fake_infect_full_mv = []
+            for i, ymd_time in tqdm(enumerate(ymd_time_full_lst[:10])):
+                target_user_full_mv_dong, target_fake_infect_full_mv_dong = torch.zeros([NUM_DONG]), torch.zeros([NUM_DONG])
                 for j, dong in enumerate(dong_lst):
                     if not user_full_to_dong_grouped[(user_full_to_dong_grouped['ymd_time']==ymd_time) & (user_full_to_dong_grouped['to_dong']==dong)].empty:
-                        target_user_full_mv[i][j] = user_full_to_dong_grouped[(user_full_to_dong_grouped['ymd_time']==ymd_time) & (user_full_to_dong_grouped['to_dong']==dong)]['mv_num'].item()
+                        target_user_full_mv_dong[j] = user_full_to_dong_grouped[(user_full_to_dong_grouped['ymd_time']==ymd_time) & (user_full_to_dong_grouped['to_dong']==dong)]['mv_num'].item()
                     if not fake_infect_full_to_dong_grouped[(fake_infect_full_to_dong_grouped['ymd_time']==ymd_time) & (fake_infect_full_to_dong_grouped['to_dong']==dong)].empty:
-                        target_fake_infect_full_mv[i][j] = fake_infect_full_to_dong_grouped[(fake_infect_full_to_dong_grouped['ymd_time']==ymd_time) & (fake_infect_full_to_dong_grouped['to_dong']==dong)]['mv_num'].item()
+                        target_fake_infect_full_mv_dong[j] = fake_infect_full_to_dong_grouped[(fake_infect_full_to_dong_grouped['ymd_time']==ymd_time) & (fake_infect_full_to_dong_grouped['to_dong']==dong)]['mv_num'].item()
+                target_user_full_mv.append(target_user_full_mv_dong)
+                target_fake_infect_full_mv.append(target_fake_infect_full_mv_dong)
 
-            train_target_user_full_mv = target_user_full_mv[48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS) : 48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS)]
-            test_target_user_full_mv = target_user_full_mv[48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS):]
-            train_target_fake_infect_full_mv = target_fake_infect_full_mv[48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS) : 48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS)]
-            test_target_fake_infect_full_mv = target_fake_infect_full_mv[48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS):]
+            train_full_target, test_full_target = [], []
+            for i in range(48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS), 48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS)):
+                train_target_user_full = target_user_full_sty[i] + target_user_full_mv[i]
+                train_target_fake_infect_full = target_fake_infect_full_sty[i] + target_fake_infect_full_mv[i]
+                train_full_target.append([train_target_user_full, train_target_fake_infect_full])
 
-            train_full_target = [train_target_user_full_sty + train_target_user_full_mv, train_target_fake_infect_full_sty + train_target_fake_infect_full_mv]
-            test_full_target = [test_target_user_full_sty + test_target_user_full_mv, test_target_fake_infect_full_sty + test_target_fake_infect_full_mv]
-
+            for i in range(48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS), 48*(LSTM_SEQUENCE_LENGTH + DELAY_DAYS + TRAIN_DAYS + TEST_DAYS)):
+                test_target_user_full = target_user_full_sty[i] + target_user_full_mv[i]
+                test_target_fake_infect_full = target_fake_infect_full_sty[i] + target_fake_infect_full_mv[i]
+                test_full_target.append([test_target_user_full, test_target_fake_infect_full])
+            
+            
             train_dataset = list(zip(train_full_inputs, train_full_target))
             test_dataset = list(zip(test_full_inputs, test_full_target))                                               
 
@@ -382,4 +398,5 @@ def data_loader_half(args):
     test_loader = DataLoader(test_dataset, shuffle=True)
     print('=== data preprocess done ===')
     
-    return train_dataset, train_loader, test_dataset, test_loader, self.min_max_values
+    
+    return train_dataset, train_loader, test_dataset, test_loader, min_max_values

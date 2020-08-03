@@ -7,6 +7,7 @@ import argparse
 import os
 from tqdm import tqdm
 import torch
+import torch.nn as nn
 import pandas as pd
 import numpy as np
 
@@ -37,6 +38,7 @@ def parse_args():
     parser.add_argument('--all_concat', help='temp_all + lstm_inputs + lstm_output concat fc layer. without it, just lstm output = output', action='store_true')
     
     # Miscellaneous
+    parser.add_argument('--loss', default='mse', type=str, help='which loss use to train, mse or rmlse')
     parser.add_argument('--task', default='real_feb', type=str, help='which task to train, real_feb or fake_full')
     parser.add_argument('--data_path', default='/home/hyungjun/jupyter/KT_covid19/data/', type=str, help='base path for preprocessed dataset')
     parser.add_argument('--data_normalize', help='+ lstm_output concat fc layer. without it, just lstm output = output', action='store_true')
@@ -47,38 +49,57 @@ def parse_args():
     args = parser.parse_args()
 
     return args
-    
+                  
+class RMSLELoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mse = nn.MSELoss()
+        
+    def forward(self, pred, actual):
+        return torch.sqrt(self.mse(torch.log(pred + 1), torch.log(actual + 1)))
 
-def main(model, train_dataloader, test_dataloader, min_max_values, learning_rate, num_epochs, args):
+    
+def main(model, train_dataloader, test_dataloader, learning_rate, num_epochs, args, min_max_values=None):
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(train_dataloader)*args.num_epochs/10)
+    mse_criterion = nn.MSELoss()
+    rmsle_criterion = RMSLELoss()
     
     model.to(args.device)
     model.train()
     
-    train_log_pd = pd.DataFrame(np.zeros([len(train_dataloader)*num_epochs, 3]), columns=['iterations', 'train_user_loss', 'train_infect_loss'])
-    valid_log_pd = pd.DataFrame(np.zeros([len(test_dataloader)*num_epochs, 3]), columns=['iterations', 'mse_valid_loss', 'mae_valid_loss'])
-    min_valid_log = 1e+2
+    train_log_pd = pd.DataFrame(np.zeros([len(train_dataloader)*num_epochs, 5]), columns=['iterations', 'train_user_mse', 'train_infect_mse', 'train_user_rmsle', 'train_infect_rmsle'])
+    valid_log_pd = pd.DataFrame(np.zeros([len(test_dataloader)*num_epochs, 5]), columns=['iterations', 'valid_user_mse', 'valid_infect_mse', 'valid_user_rmsle', 'valid_infect_rmsle'])
+    min_valid_log = 1e+10
     
     for epoch in tqdm(range(num_epochs)):
         with tqdm(train_dataloader, total=len(train_dataloader), leave=False) as pbar:
             for i, data in enumerate(pbar):
-                train_input = data[0]
-                #print('train_input : ',train_input)
-                train_target = data[1].type(torch.FloatTensor).to(args.device)
-                #print('train_target : ',train_target)
+                train_input, train_target = data[0], data[1]
+                # print('train_input : ',train_input)
+                # print('train_target : ',train_target.shape)
+                
                 # train
-                user_output, infect_output = model(train_input, min_max_values, args.task)
-                user_loss = torch.nn.functional.mse_loss(user_output, train_target[0].squeeze(0))
-                infect_loss = torch.nn.functional.mse_loss(infect_output, train_target[1].squeeze(0))
-                loss = user_loss + infect_loss
+                user_output, infect_output = model(train_input, task=args.task, data_normalize=args.data_normalize, min_max_values=min_max_values)
+                user_mse = mse_criterion(user_output, train_target[0].type(torch.FloatTensor).to(args.device))
+                infect_mse = mse_criterion(infect_output, train_target[1].type(torch.FloatTensor).to(args.device))
+                user_rmsle = rmsle_criterion(user_output, train_target[0].type(torch.FloatTensor).to(args.device))
+                infect_rmsle = rmsle_criterion(infect_output, train_target[1].type(torch.FloatTensor).to(args.device))
+                
+                if args.loss == 'mse':
+                    loss = user_mse + infect_mse
+                elif args.loss == 'rmsle':
+                    loss = user_rmsle + infect_rmsle
                 
                 train_log_pd['iterations'][epoch*len(train_dataloader)+i] = epoch*len(train_dataloader)+i
-                train_log_pd['train_user_loss'][epoch*len(train_dataloader)+i] = user_loss.item()
-                train_log_pd['train_infect_loss'][epoch*len(train_dataloader)+i] = infect_loss.item()
+                train_log_pd['train_user_mse'][epoch*len(train_dataloader)+i] = user_mse.item()
+                train_log_pd['train_infect_mse'][epoch*len(train_dataloader)+i] = infect_mse.item()
+                train_log_pd['train_user_rmsle'][epoch*len(train_dataloader)+i] = user_rmsle.item()
+                train_log_pd['train_infect_rmsle'][epoch*len(train_dataloader)+i] = infect_rmsle.item()
 
-                filename = os.path.join('{}_lr{}_d{}-{}-{}_s{}_cat{}_temp{}_all{}_lstm-h-dim{}_lstm-in-dim{}_g-user-dim{}_g-infect-dim{}'.format(
+                filename = os.path.join('{}_{}_lr{}_d{}-{}-{}_s{}_cat{}_temp{}_all{}_lstm-h-dim{}_lstm-in-dim{}_g-user-dim{}_g-infect-dim{}'.format(
                                                                                                                     args.task,
+                                                                                                                    args.loss,
                                                                                                                     args.learning_rate, 
                                                                                                                     args.train_days,
                                                                                                                     args.delay_days, 
@@ -103,14 +124,20 @@ def main(model, train_dataloader, test_dataloader, min_max_values, learning_rate
             scheduler.step()
                 
             # validation
-            mean_valid_user_log, mean_valid_infect_log = validation(model, test_dataloader, args.device)
+            mean_valid_user_mse, mean_valid_infect_mse, mean_valid_user_rmsle, mean_valid_infect_rmsle = validation(model, test_dataloader,
+                                                                                                                    task=args.task, 
+                                                                                                                    device=args.device, 
+                                                                                                                    data_normalize=args.data_normalize, 
+                                                                                                                    min_max_values=min_max_values)
             valid_log_pd['iterations'][epoch*len(test_dataloader)+i] = epoch*len(test_dataloader)+i
-            valid_log_pd['valid_user_loss'][epoch*len(test_dataloader)+i] = mean_valid_user_log
-            valid_log_pd['valid_infectloss'][epoch*len(test_dataloader)+i] = mean_valid_infect_log
+            valid_log_pd['valid_user_mse'][epoch*len(test_dataloader)+i] = mean_valid_user_mse
+            valid_log_pd['valid_infect_mse'][epoch*len(test_dataloader)+i] = mean_valid_infect_mse
+            valid_log_pd['valid_user_rmsle'][epoch*len(test_dataloader)+i] = mean_valid_user_rmsle
+            valid_log_pd['valid_infect_rmsle'][epoch*len(test_dataloader)+i] = mean_valid_infect_rmsle
             valid_log_pd.to_csv(args.result_path + 'valid_' + filename + '.csv', index=False)
-            mean_mse_valid_log = mean_valid_user_log + mean_valid_infect_log
-            if min_valid_log >= mean_mse_valid_log:
-                min_valid_log = mean_mse_valid_log
+            mean_mse_valid_mse = mean_valid_user_mse + mean_valid_infect_mse
+            if min_valid_log >= mean_mse_valid_mse:
+                min_valid_log = mean_mse_valid_mse
                 print('best valid update => epochs : {}, iter : {}, loss : {}'.format(epoch, i, min_valid_log))
                 best_valid_model = model
                 model_path = os.path.join(args.result_path+'models/' + filename)
@@ -121,33 +148,38 @@ def main(model, train_dataloader, test_dataloader, min_max_values, learning_rate
                     state_dict = model.state_dict()
                     torch.save(state_dict, f)
 
-def validation(model, dataloader, min_max_values, task, device):
+
+def validation(model, dataloader, task, device, data_normalize, min_max_values):
     model.eval()
+    mse_criterion = nn.MSELoss()
+    rmsle_criterion = RMSLELoss()
     
-    mse_valid_log, mae_valid_log = [], []
+    valid_user_mse, valid_infect_mse, valid_user_rmsle, valid_infect_rmsle = [], [], [], []
     with tqdm(dataloader, total=len(dataloader), leave=False) as pbar:
         for i, data in enumerate(pbar):
-            test_input = data[0]
-            test_target = data[1].type(torch.FloatTensor).to(device)
+            test_input, test_target = data[0], data[1]
+            user_output, infect_output = model(test_input, task=task, data_normalize=data_normalize, min_max_values=min_max_values)
+            user_mse = mse_criterion(user_output, test_target[0].type(torch.FloatTensor).to(device))
+            infect_mse = mse_criterion(infect_output, test_target[1].type(torch.FloatTensor).to(device))
+            user_rmsle = rmsle_criterion(user_output, test_target[0].type(torch.FloatTensor).to(device))
+            infect_rmsle = rmsle_criterion(infect_output, test_target[1].type(torch.FloatTensor).to(device))
             
-            user_output, infect_output = model(test_input, min_max_values, task)
-            print('output : ', output)
-            print('test   : ', test_target.squeeze(0))
-            user_loss = torch.nn.functional.mse_loss(user_output, test_target[0].squeeze(0))
-            infect_loss = torch.nn.functional.mse_loss(infect_output, test_target[1].squeeze(0))
-            valid_user_log.append(user_loss.item())
-            valid_infect_log.append(infect_loss.item())
+            valid_user_mse.append(user_mse.item())
+            valid_infect_mse.append(infect_mse.item())
+            valid_user_rmsle.append(user_rmsle.item())
+            valid_infect_rmsle.append(infect_rmsle.item())
             
     model.train()
     
-    return np.mean(valid_user_log), np.mean(valid_infect_log)
+    return np.mean(valid_user_mse), np.mean(valid_infect_mse), np.mean(valid_user_rmsle), np.mean(valid_infect_rmsle)
         
 if __name__ == '__main__':
     args = parse_args()
 #     make_result_dir(args)
     train_dataset, train_loader, test_dataset, test_loader, min_max_values = data_loader_half(args)
+        
     model = GC_TG_LSTM(args)
 
     print('=== training start ===' )
-    main(model, train_loader, test_loader, min_max_values, learning_rate=args.learning_rate, num_epochs=args.num_epochs, args=args)
+    main(model, train_loader, test_loader, learning_rate=args.learning_rate, num_epochs=args.num_epochs, args=args, min_max_values = min_max_values)
     

@@ -74,7 +74,7 @@ class GC_TG_LSTM(nn.Module):
         self.all_cat_act = nn.ReLU()
         self.all_cat_output_fc = nn.Linear(args.num_dong*3, self.num_dong*2)
         
-    def forward(self, x, min_max_values, task):
+    def forward(self, x, task, data_normalize, min_max_values=None):
         # data decomposition
         '''
         len(data[0]) = 3 : user / infect / temp
@@ -152,11 +152,12 @@ class GC_TG_LSTM(nn.Module):
             output = self.all_cat_output_fc(torch.cat((lstm_output, lstm_input_all, temp_sig_all)))
             
         user_pred, infect_pred = output[:self.num_dong], output[self.num_dong:]
+        if data_normalize:
+            if task == 'real_feb':
+                user_pred = denormalize(user_pred, min_max_values[0]+min_max_values[2], min_max_values[1]+min_max_values[3])
+                infect_pred = denormalize(infect_pred, min_max_values[4]+min_max_values[6], min_max_values[5]+min_max_values[7])
+            elif task == 'fake_full':
+                user_pred = denormalize(user_pred, min_max_values[8]+min_max_values[10], min_max_values[9]+min_max_values[11])
+                infect_pred = denormalize(infect_pred, min_max_values[12]+min_max_values[14], min_max_values[13]+min_max_values[15])
         
-        if task == 'real_feb':
-            user_pred = denormalize(user_pred, min_max_values[0]+min_max_values[2], min_max_values[1]+min_max_values[3])
-            infect_pred = denormalize(infect_pred, min_max_values[4]+min_max_values[6], min_max_values[5]+min_max_values[7])
-        elif task == 'fake_full':
-            user_pred = denormalize(user_pred, min_max_values[8]+min_max_values[10], min_max_values[9]+min_max_values[11])
-            infect_pred = denormalize(infect_pred, min_max_values[12]+min_max_values[14], min_max_values[13]+min_max_values[15])
         return user_pred, infect_pred
