@@ -28,9 +28,9 @@ class GC_TG_LSTM(nn.Module):
         self.all_concat = args.all_concat
         
         # graph conv for user
-        self.graph_conv_user1 = GCNConv(1, args.graph_conv_feature_dim_user)
+        self.graph_conv_user1 = GCNConv(1,10)
         self.graph_act1_user1 = nn.ReLU() # nn.LeakyReLU(negative_slope=0.1) #
-        self.graph_conv_user2 =  GCNConv(args.graph_conv_feature_dim_user, args.graph_conv_feature_dim_user)
+        self.graph_conv_user2 =  GCNConv(10, args.graph_conv_feature_dim_user)
         self.graph_act1_user2 =  nn.ReLU() # nn.LeakyReLU(negative_slope=0.1) #
         
         self.graph_fc_user = nn.Linear(self.num_dong * args.graph_conv_feature_dim_user, args.lstm_input_size)
@@ -39,9 +39,9 @@ class GC_TG_LSTM(nn.Module):
         # sefl.graph_act2_user2 = nn.ReLU()
         
         # graph conv for infect
-        self.graph_conv_infect1 = GCNConv(1, args.graph_conv_feature_dim_infect)
+        self.graph_conv_infect1 = GCNConv(1, 10)
         self.graph_act1_infect1 =  nn.ReLU()  # nn.LeakyReLU(negative_slope=0.1) #
-        self.graph_conv_infect2 = GCNConv(args.graph_conv_feature_dim_infect, args.graph_conv_feature_dim_infect)
+        self.graph_conv_infect2 = GCNConv(10, args.graph_conv_feature_dim_infect)
         self.graph_act1_infect2 =  nn.ReLU()  # nn.LeakyReLU(negative_slope=0.1) #
         self.graph_fc_infect = nn.Linear(self.num_dong * args.graph_conv_feature_dim_infect, args.lstm_input_size)
         self.graph_act2_infect = nn.ReLU() #  nn.LeakyReLU(negative_slope=0.1) #
@@ -74,7 +74,7 @@ class GC_TG_LSTM(nn.Module):
         self.all_cat_act = nn.ReLU()
         self.all_cat_output_fc = nn.Linear(args.num_dong*3, self.num_dong*2)
         
-    def forward(self, x, task, data_normalize, min_max_values=None):
+    def forward(self, x, task, data_normalize, min_max_values=None, deep_graph=None):
         # data decomposition
         '''
         len(data[0]) = 3 : user / infect / temp
@@ -92,6 +92,10 @@ class GC_TG_LSTM(nn.Module):
             graph_user = self.graph_conv_user1(user_graph_list[i][0].reshape([self.num_dong,-1]).type(torch.FloatTensor).to(self.device), 
                                               user_graph_list[i][1].squeeze(0).to(self.device), user_graph_list[i][2].squeeze(0).to(self.device))
             graph_user = self.graph_act1_user1(graph_user)
+            if deep_graph:
+                graph_user = self.graph_conv_user2(graph_user.type(torch.FloatTensor).reshape([self.num_dong,-1]).to(self.device), 
+                                                   user_graph_list[i][1].squeeze(0).to(self.device), user_graph_list[i][2].squeeze(0).to(self.device))
+                graph_user = self.graph_act1_user2(graph_user)
             graph_user = self.graph_fc_user(graph_user.view(-1).type(torch.FloatTensor).to(self.device))
             graph_user = self.graph_act2_user(graph_user)
 #             print('graph_user : ', graph_user)
@@ -100,6 +104,10 @@ class GC_TG_LSTM(nn.Module):
             graph_infect = self.graph_conv_infect1(infect_graph_list[i][0].reshape([self.num_dong,-1]).type(torch.FloatTensor).to(self.device), 
                                                   infect_graph_list[i][1].squeeze(0).to(self.device), infect_graph_list[i][2].squeeze(0).to(self.device))
             graph_infect = self.graph_act1_infect1(graph_infect)
+            if deep_graph:
+                graph_infect = self.graph_conv_infect2(graph_infect.type(torch.FloatTensor).reshape([self.num_dong,-1]).to(self.device), 
+                                                       infect_graph_list[i][1].squeeze(0).to(self.device), infect_graph_list[i][2].squeeze(0).to(self.device))
+                graph_infect = self.graph_act1_infect2(graph_infect)
             graph_infect = self.graph_fc_infect(graph_infect.view(-1).type(torch.FloatTensor).to(self.device))
             graph_infect = self.graph_act2_infect(graph_infect)
 #             print('graph_infect: ', graph_infect)

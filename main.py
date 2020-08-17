@@ -33,6 +33,7 @@ def parse_args():
     parser.add_argument('--graph_conv_feature_dim_infect', default=10, type=int, help='# of epochse')
     
     # architecture switch
+    parser.add_argument('--deep_graph', help='2 layers of gcn', action='store_true')
     parser.add_argument('--concat_fc', help='(g_user, g_infect, temp_sig) concat fc layer', action='store_true')
     parser.add_argument('--temp_all_concat', help='temp_all concat fc layer. without it, just lstm output = output', action='store_true')
     parser.add_argument('--all_concat', help='temp_all + lstm_inputs + lstm_output concat fc layer. without it, just lstm output = output', action='store_true')
@@ -80,7 +81,7 @@ def main(model, train_dataloader, test_dataloader, learning_rate, num_epochs, ar
                 # print('train_target : ',train_target.shape)
                 
                 # train
-                user_output, infect_output = model(train_input, task=args.task, data_normalize=args.data_normalize, min_max_values=min_max_values)
+                user_output, infect_output = model(train_input, task=args.task, data_normalize=args.data_normalize, min_max_values=min_max_values, deep_graph=args.deep_graph)
                 user_mse = mse_criterion(user_output, train_target[0].type(torch.FloatTensor).to(args.device))
                 infect_mse = mse_criterion(infect_output, train_target[1].type(torch.FloatTensor).to(args.device))
                 user_rmsle = rmsle_criterion(user_output, train_target[0].type(torch.FloatTensor).to(args.device))
@@ -97,7 +98,7 @@ def main(model, train_dataloader, test_dataloader, learning_rate, num_epochs, ar
                 train_log_pd['train_user_rmsle'][epoch*len(train_dataloader)+i] = user_rmsle.item()
                 train_log_pd['train_infect_rmsle'][epoch*len(train_dataloader)+i] = infect_rmsle.item()
 
-                filename = os.path.join('{}_{}_lr{}_d{}-{}-{}_s{}_cat{}_temp{}_all{}_lstm-h-dim{}_lstm-in-dim{}_g-user-dim{}_g-infect-dim{}'.format(
+                filename = os.path.join('{}_{}_lr{}_d{}-{}-{}_s{}_cat{}_temp{}_all{}_lstm-h-dim{}_lstm-in-dim{}_g-user-dim{}_g-infect-dim{}_deep{}'.format(
                                                                                                                     args.task,
                                                                                                                     args.loss,
                                                                                                                     args.learning_rate, 
@@ -111,7 +112,8 @@ def main(model, train_dataloader, test_dataloader, learning_rate, num_epochs, ar
                                                                                                                     args.lstm_hidden_size,
                                                                                                                     args.lstm_input_size,
                                                                                                                     args.graph_conv_feature_dim_user,
-                                                                                                                    args.graph_conv_feature_dim_infect))
+                                                                                                                    args.graph_conv_feature_dim_infect,
+                                                                                                                    args.deep_graph))
                                                            
                 train_log_pd.to_csv(args.result_path + 'train_' + filename + '.csv', index=False)
 
@@ -128,7 +130,8 @@ def main(model, train_dataloader, test_dataloader, learning_rate, num_epochs, ar
                                                                                                                     task=args.task, 
                                                                                                                     device=args.device, 
                                                                                                                     data_normalize=args.data_normalize, 
-                                                                                                                    min_max_values=min_max_values)
+                                                                                                                    min_max_values=min_max_values,
+                                                                                                                    deep_graph=args.deep_graph)
             valid_log_pd['iterations'][epoch*len(test_dataloader)+i] = epoch*len(test_dataloader)+i
             valid_log_pd['valid_user_mse'][epoch*len(test_dataloader)+i] = mean_valid_user_mse
             valid_log_pd['valid_infect_mse'][epoch*len(test_dataloader)+i] = mean_valid_infect_mse
@@ -149,7 +152,7 @@ def main(model, train_dataloader, test_dataloader, learning_rate, num_epochs, ar
                     torch.save(state_dict, f)
 
 
-def validation(model, dataloader, task, device, data_normalize, min_max_values):
+def validation(model, dataloader, task, device, data_normalize, min_max_values, deep_graph):
     model.eval()
     mse_criterion = nn.MSELoss()
     rmsle_criterion = RMSLELoss()
@@ -158,7 +161,7 @@ def validation(model, dataloader, task, device, data_normalize, min_max_values):
     with tqdm(dataloader, total=len(dataloader), leave=False) as pbar:
         for i, data in enumerate(pbar):
             test_input, test_target = data[0], data[1]
-            user_output, infect_output = model(test_input, task=task, data_normalize=data_normalize, min_max_values=min_max_values)
+            user_output, infect_output = model(test_input, task=task, data_normalize=data_normalize, min_max_values=min_max_values, deep_graph=deep_graph)
             user_mse = mse_criterion(user_output, test_target[0].type(torch.FloatTensor).to(device))
             infect_mse = mse_criterion(infect_output, test_target[1].type(torch.FloatTensor).to(device))
             user_rmsle = rmsle_criterion(user_output, test_target[0].type(torch.FloatTensor).to(device))
