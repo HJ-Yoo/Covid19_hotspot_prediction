@@ -1,7 +1,7 @@
 # Covid19_hotspot_prediction
 <img src="https://user-images.githubusercontent.com/40876087/95192127-b0933800-080c-11eb-9119-925df2090b39.JPG" width="90%"></img>
 
-This repository is the implementation of "Covid19_hotspot_prediction" project.<br>
+This repository is the implementation of "Covid19_hotspot_prediction" project.(KT-KAIST AI One Team Cooperation)<br>
 There are two types of models, Covid-19 and Flu, and the difference between the models is the predicted time interval and the data used.
 
 For the data, I used the information on the movements of the confirmed patient and the data on the floating population, and temporal signal data. 
