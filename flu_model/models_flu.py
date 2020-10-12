@@ -11,9 +11,9 @@ from torch_geometric.nn import GCNConv
 def denormalize(x, min_val, max_val):
     return x * (max_val - min_val) + min_val
 
-class GC_TG_LSTM_flu(nn.Module):
+class GCN_LSTM_flu(nn.Module):
     def __init__(self, args):
-        super(GC_TG_LSTM_flu, self).__init__()
+        super(GCN_LSTM_flu, self).__init__()
         
         # hyperparameters
         self.device = args.device
