@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import datetime
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -10,6 +11,13 @@ import networkx as nx
 import torch_geometric
 import os
 
+def test_check(data):
+    if data[4] == 'Not Done':
+        if data[6] =='Not Done' or data[6] == 'No Test':
+            return None
+        return data[6].split('-')
+    else:
+        return data[4].split('-')
 
 def data_loader_flu(args):
     data_filename = os.path.join('flu_norm{}_d{}-{}-{}_s{}'.format(args.data_normalize, args.train_days, args.delay_days, args.test_days, args.lstm_sequence_length))
@@ -29,6 +37,51 @@ def data_loader_flu(args):
     edge_seoul_user_18 = np.load(args.data_path + 'raw_data/flu/seoul_sgg_mv_2018_2019.npy', allow_pickle=True)
     edge_seoul_user_19 = np.load(args.data_path + 'raw_data/flu/seoul_sgg_mv_2019_2020.npy', allow_pickle=True) 
     edge_seoul_user = np.concatenate((edge_seoul_user_17, edge_seoul_user_18, edge_seoul_user_19))
+    
+    flu = np.load('./data/raw_data/flu/flu_np.npy', allow_pickle=True)
+    
+    # flu data reconstruction
+    flu_seoul = flu[flu[:,2]=='seoul']
+
+    flu_seoul_lst = flu_seoul.tolist()
+    cols = np.unique(flu_seoul[:,3])
+    np.where(flu_seoul[:,3]=='yongsan ')
+    flu_seoul_lst[547][3] = 'yongsan'
+    np.where(flu_seoul[:,3]=='dongjak ')
+    flu_seoul_lst[447][3] = 'dongjak'
+    np.where(flu_seoul[:,3]=='jongno ')
+    flu_seoul_lst[545][3] = 'jongno'
+    np.where(flu_seoul[:,3]=='gwangmyeong')
+    del flu_seoul_lst[672]
+
+    flu_seoul = np.array(flu_seoul_lst)
+    cols = np.unique(flu_seoul[:,3])
+    cols = np.append(cols, 'junggu')
+    cols = np.append(cols, 'sungdong')
+    cols = sorted(cols)
+
+    idx_17_18 = [datetime.datetime(year=2017, month=11, day=1)+datetime.timedelta(days=i) for i in range(151)]
+    idx_18_19 = [datetime.datetime(year=2018, month=11, day=1)+datetime.timedelta(days=i) for i in range(151)]
+    idx_19_20 = [datetime.datetime(year=2019, month=11, day=1)+datetime.timedelta(days=i) for i in range(152)]
+    idx = idx_17_18 + idx_18_19 + idx_19_20
+
+    flu_df = pd.DataFrame(data = np.zeros([len(idx), len(cols)]), index=idx, columns=cols)
+    for i in range(len(flu_seoul)):
+        date = test_check(flu_seoul[i,:])
+        if date ==None:
+            continue
+        year, mon, day = int(date[0]), int(date[1]), int(date[2])
+        date = datetime.datetime(year=year, month=mon, day=day)
+        sgg = flu_seoul[i,:][3]
+        if date not in idx:
+            continue
+        for k in range(5):
+            curr_date = date+datetime.timedelta(days=k)
+            if curr_date not in idx:
+                continue
+            flu_df.loc[date+datetime.timedelta(days=k),sgg] += 1
+
+    np.save('./data/raw_data/flu/flu_seoul.npy',flu_df.to_numpy())
     
     seoul_flu = torch.from_numpy(np.load(args.data_path + '/raw_data/flu/flu_seoul.npy', allow_pickle=True))
     
